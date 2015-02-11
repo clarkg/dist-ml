@@ -10,9 +10,9 @@ import sys
 import time
 
 # Constants
-NUM_LINES_IN_FILE = 12
+NUM_LINES_IN_FILE = 100000
 EPSILON = 1E-6
-LEARNING_RATE = 1E-3
+LEARNING_RATE = 1E-9
 P = np.array([[(1.0/3.0), (1.0/3.0), 0.0, (1.0/3.0)], [(1.0/3.0), (1.0/3.0),
 (1.0/3.0), 0.0], [0.0, (1.0/3.0), (1.0/3.0), (1.0/3.0)], [(1.0/3.0), 0.0, (1.0/3.0), (1.0/3.0)]]) 
 
@@ -71,24 +71,31 @@ startLine = rank * linesPerTask
 endLine = (rank + 1) * linesPerTask - 1
 
 currLine = 0
-dataFile = open("test_data.txt", "r")
+dataFile = open("line_data.txt", "r")
+if rank == 0:
+    outFile = open("output.txt", "wb")
 training_data = []
 for line in dataFile:
 	if currLine >= startLine and currLine <= endLine:
 		x, y = [float(f) for f in line.split(" ")]
 		training_data.append(np.array([x, y]))	
 	currLine += 1
-print training_data
+
+if rank == 0:
+    outFile.write("{0}".format(training_data))
 
 # Init
 w = np.array([0.0, 0.0])
 z = 1.0
 
-while True:
+num_iterations = 0
+
+while num_iterations < 10:
     # if z is too small, w = c / z will be too big
     if z > EPSILON:
-        q = w - LEARNING_RATE * gradient(w, training_data);
+        q = w - (LEARNING_RATE * gradient(w, training_data));
         
+        print ("gradient: {0} q: {1}".format(gradient(w, training_data), q)) 
         # for each node u
         for u in range(0, size):
             if rank != u:
@@ -104,14 +111,18 @@ while True:
     # while message queue not empty
     while comm.Iprobe(source=MPI.ANY_SOURCE, tag = 0):
         new_data = np.empty(w.size + 1, dtype=np.float64)
+        
+        # pop from the message queue
         comm.Recv([new_data, MPI.FLOAT], source = MPI.ANY_SOURCE, tag = 0) 
         c += new_data[0:(new_data.size - 1)] # add everything but the last element of new_data
         z += new_data[new_data.size - 1] # add the last element of new_data
 
     # update w
-    w = c / z
+    w = c  / z
     if rank == 0:
-        print(w)
+        print("{0}\n\n".format(w))
+
+    num_iterations += 1
 
 # while not converged:
 
