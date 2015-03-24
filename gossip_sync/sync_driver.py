@@ -13,7 +13,7 @@ import time
 # Constants
 NUM_LINES_IN_FILE = 100
 EPSILON = 1E-6
-LEARNING_RATE = 1E-3
+LEARNING_RATE = 1E-4
 P = np.array([[(1.0/3.0), (1.0/3.0), 0.0, (1.0/3.0)], [(1.0/3.0), (1.0/3.0),
 (1.0/3.0), 0.0], [0.0, (1.0/3.0), (1.0/3.0), (1.0/3.0)], [(1.0/3.0), 0.0, (1.0/3.0), (1.0/3.0)]]) 
 
@@ -52,13 +52,17 @@ def isDoublyStochastic(P):
     assert P.ndim >= 2
     return isColumnStochastic(P) and isRowStochastic(P)
 
+def gradient_descent_runner(training_data, w, LEARNING_RATE, num_iterations):
+    for i in range(num_iterations):
+        m = w[0]
+        b = w[1]
+        w = step_gradient(m, b, training_data)
+    return w
 
-def gradient(w, training_data):
+def step_gradient(m, b, training_data):
     m_gradient = 0.
     b_gradient = 0.
-    N = len(training_data)
-    m = w[0]
-    b = w[1]
+    N = float(len(training_data))
 
     for x, y in training_data:
         # if rank == 0: print("x: {0}, y: {1}".format(x,y))
@@ -66,10 +70,10 @@ def gradient(w, training_data):
         m_gradient += (-2/N) * x * (y - (m * x) - b)
         b_gradient += (-2/N) * (y - (m * x) - b) 
 
-    # m_gradient /= len(training_data)
-    # b_gradient /= len(training_data)
+    new_m = m - LEARNING_RATE * m_gradient
+    new_b = b - LEARNING_RATE * b_gradient
 
-    return np.array([m_gradient, b_gradient])
+    return np.array([new_m, new_b])
 
 # Initialize MPI
 comm = MPI.COMM_WORLD
@@ -96,73 +100,78 @@ q = np.array([0.0, 0.0])
 
 # print("rank {0} beginning\n".format(rank))
 
-num_iterations = 0
+starting_b = 0
+starting_m = 0
+[m,b] = gradient_descent_runner(training_data, w, LEARNING_RATE, 100000)
+print("After 100000 iterations, b = {0}, m = {1}".format(b,m))
 
-while num_iterations < 10:
-    if rank == 0:
-        print("\niteration {0}".format(num_iterations))
-        print("current model: m: {1}, b: {2}".format(rank,w[0],w[1]))
+# num_iterations = 0
 
-    # if rank == 0:
-    #     grad_w = gradient(w, training_data)
-    #     print("node {0} computing grad w...".format(rank))
-    #     print("grad m at node {0} = {1}".format(rank,grad_w[0]))
-    #     print("grad b at node {0} = {1}".format(rank,grad_w[1]))
-    q = w - (LEARNING_RATE * gradient(w, training_data))
+# while num_iterations < 100:
+#     if rank == 0:
+#         print("\niteration {0}".format(num_iterations))
+#         print("current model: m: {1}, b: {2}".format(rank,w[0],w[1]))
 
-    # send q to other nodes
-    for u in range(0, size):
-        if rank != u:
-            comm.Isend([q, MPI.FLOAT], u, tag = num_iterations)
+#     # if rank == 0:
+#     #     grad_w = gradient(w, training_data)
+#     #     print("node {0} computing grad w...".format(rank))
+#     #     print("grad m at node {0} = {1}".format(rank,grad_w[0]))
+#     #     print("grad b at node {0} = {1}".format(rank,grad_w[1]))
+#     q = step_gradient(w, training_data)
 
-    # collect q from other nodes
-    q_u = [np.empty(q.size, dtype=np.float64) for i in range(0, size)]
-    q_u[rank] = q
+#     # send q to other nodes
+#     for u in range(0, size):
+#         if rank != u:
+#             comm.Isend([q, MPI.FLOAT], u, tag = num_iterations)
 
-    status = MPI.Status()
-    number_of_messages_received = 0
+#     # collect q from other nodes
+#     q_u = [np.empty(q.size, dtype=np.float64) for i in range(0, size)]
+#     q_u[rank] = q
 
-    # while number_of_messages_received != (size - 1):
-    #     while not comm.Iprobe(source=MPI.ANY_SOURCE, tag = num_iterations, status = status):
-    #         # create empty buffer and determine which node the message came from
-    #         # (so we know which Puv to apply to it)
-    #         pass
+#     status = MPI.Status()
+#     number_of_messages_received = 0
 
-    #     new_data = np.empty(w.size, dtype=np.float64)
-    #     u = status.source
+#     # while number_of_messages_received != (size - 1):
+#     #     while not comm.Iprobe(source=MPI.ANY_SOURCE, tag = num_iterations, status = status):
+#     #         # create empty buffer and determine which node the message came from
+#     #         # (so we know which Puv to apply to it)
+#     #         pass
+
+#     #     new_data = np.empty(w.size, dtype=np.float64)
+#     #     u = status.source
             
-    #     # pop from the message queue
-    #     comm.Irecv([new_data, MPI.FLOAT], source = MPI.ANY_SOURCE, tag = num_iterations) 
-    #     q_u[u] = new_data
-    #     if rank == 0:
-    #         print("Received {0} from node {1} during node {1}'s iteration {2}".format(new_data,u,status.tag))
+#     #     # pop from the message queue
+#     #     comm.Irecv([new_data, MPI.FLOAT], source = MPI.ANY_SOURCE, tag = num_iterations) 
+#     #     q_u[u] = new_data
+#     #     if rank == 0:
+#     #         print("Received {0} from node {1} during node {1}'s iteration {2}".format(new_data,u,status.tag))
 
-    #     number_of_messages_received += 1
+#     #     number_of_messages_received += 1
 
-    # without this barrier, only 0 gets sent...
-    comm.Barrier()
+#     # without this barrier, only 0 gets sent...
+#     comm.Barrier()
 
-    while number_of_messages_received != (size - 1):
-        #pop from the message queue
-        for u in range(0, size):
-            new_data = np.empty(q.size, dtype=np.float64)
-            if rank != u:
-                rcvd_from_u = comm.Irecv([new_data, MPI.FLOAT], source = u, tag = num_iterations)
+#     while number_of_messages_received != (size - 1):
+#         #pop from the message queue
+#         for u in range(0, size):
+#             new_data = np.empty(q.size, dtype=np.float64)
+#             if rank != u:
+#                 rcvd_from_u = comm.Irecv([new_data, MPI.FLOAT], source = u, tag = num_iterations)
 
-                if rcvd_from_u:
-                    q_u[u] = new_data
-                    number_of_messages_received += 1
-                    if rank == 0:
-                        print("Node {1}'s q: {0}".format(new_data,u))
+#                 if rcvd_from_u:
+#                     q_u[u] = new_data
+#                     number_of_messages_received += 1
+#                     if rank == 0:
+#                         print("Node {1}'s q: {0}".format(new_data,u))
 
-    print("Node 0's q: {}".format(q))
-    for u in range(0, size):
-        Puv = P[rank, u]
-        w += q_u[u] * Puv
+#     print("Node 0's q: {}".format(q))
+#     for u in range(0, size):
+#         Puv = P[rank, u]
+#         w += q_u[u] * 1
 
-    if rank == 0:
-        print("new model: {0}\n".format(w))
+#     if rank == 0:
+#         print("new model: {0}\n".format(w))
 
-    # wait for all nodes to finish this iteration
-    comm.barrier()
-    num_iterations += 1
+#     # wait for all nodes to finish this iteration
+#     comm.Barrier()
+#     num_iterations += 1
