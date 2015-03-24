@@ -111,7 +111,7 @@ def run():
         comm.Barrier()
 
         while number_of_messages_received != (size - 1):
-            #pop from the message queue
+            # pop from the message queue
             for u in range(0, size):
                 new_data = np.empty(q.size, dtype=np.float64)
                 if rank != u:
