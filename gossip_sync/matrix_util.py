@@ -1,4 +1,5 @@
 import numpy as np
+import sys
 
 def isStochastic(vector):
     """Returns true if numpy vector is stochastic"""
@@ -29,3 +30,7 @@ def isDoublyStochastic(P):
     """Returns true if 2D array P is doubly stochastic"""
     assert P.ndim >= 2
     return isColumnStochastic(P) and isRowStochastic(P)
+
+def isSquare(P):
+    """Returns true if array P is a square array"""
+    return P.ndim == 2 and P.shape[0] == P.shape[1]

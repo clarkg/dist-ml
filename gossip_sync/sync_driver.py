@@ -7,8 +7,6 @@
 
 from mpi4py import MPI
 import numpy as np
-import sys
-import time
 
 import matrix_util
 
@@ -20,6 +18,7 @@ MAX_ITERATIONS = 1E6
 
 DATA_LOCATION = "../line_data2.txt"
 
+# P is the consensus matrix
 P = np.array([[(1.0/3.0), (1.0/3.0), 0.0, (1.0/3.0)], [(1.0/3.0), (1.0/3.0),
 (1.0/3.0), 0.0], [0.0, (1.0/3.0), (1.0/3.0), (1.0/3.0)], [(1.0/3.0), 0.0, (1.0/3.0), (1.0/3.0)]]) 
 
@@ -43,15 +42,9 @@ def gradient(w, training_data):
     b = w[1]
 
     for x, y in training_data:
-        # if rank == 0: print("x: {0}, y: {1}".format(x,y))
         # w[0] is m and w[1] is b
         m_gradient += (-2/N) * x * (y - (m * x) - b)
         b_gradient += (-2/N) * (y - (m * x) - b) 
-
-    # new_m = m - LEARNING_RATE * m_gradient
-    # new_b = b - LEARNING_RATE * b_gradient
-
-    # return np.array([new_m, new_b])
 
     return np.array([m_gradient, b_gradient])
 
@@ -59,10 +52,18 @@ def hasConverged(old_w, w, EPSILON, num_iterations, max_iterations):
     return (abs(w[0] - old_w[0]) < EPSILON and abs(w[1] - old_w[1])) or (num_iterations > max_iterations)
 
 def run():
+    assert matrix_util.isSquare(P)
+    assert matrix_util.isColumnStochastic(P)
+    
     # Initialize MPI
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
+
+    print(P.size)
+   
+    # Make sure P has the correct dimensions given number of processes 
+    assert P.shape[0] == size
 
     # Partition data
     lines_per_task = NUM_LINES_IN_FILE / size
@@ -79,8 +80,8 @@ def run():
         curr_line += 1
 
     # Init
-    w = np.array([0.0, 0.0])
-    q = np.array([0.0, 0.0])
+    w = np.array([0.0, 0.0]) # w will represent the current guess
+    q = np.array([0.0, 0.0]) # q will represent the piece that each node sends to its neighbors
 
     num_iterations = 0
 
