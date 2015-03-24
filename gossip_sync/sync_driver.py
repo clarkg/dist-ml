@@ -12,10 +12,11 @@ import time
 
 # Constants
 NUM_LINES_IN_FILE = 100
-EPSILON = 1E-6
+EPSILON = 1E-7
 LEARNING_RATE = 1E-4
 P = np.array([[(1.0/3.0), (1.0/3.0), 0.0, (1.0/3.0)], [(1.0/3.0), (1.0/3.0),
 (1.0/3.0), 0.0], [0.0, (1.0/3.0), (1.0/3.0), (1.0/3.0)], [(1.0/3.0), 0.0, (1.0/3.0), (1.0/3.0)]]) 
+MAX_ITERATIONS = 1E6
 
 # 1/3 1/3 0 1/3
 # 1/3 1/3 1/3 0
@@ -59,10 +60,12 @@ def gradient_descent_runner(training_data, w, LEARNING_RATE, num_iterations):
         w = step_gradient(m, b, training_data)
     return w
 
-def step_gradient(m, b, training_data):
+def gradient(w, training_data):
     m_gradient = 0.
     b_gradient = 0.
     N = float(len(training_data))
+    m = w[0]
+    b = w[1]
 
     for x, y in training_data:
         # if rank == 0: print("x: {0}, y: {1}".format(x,y))
@@ -70,10 +73,15 @@ def step_gradient(m, b, training_data):
         m_gradient += (-2/N) * x * (y - (m * x) - b)
         b_gradient += (-2/N) * (y - (m * x) - b) 
 
-    new_m = m - LEARNING_RATE * m_gradient
-    new_b = b - LEARNING_RATE * b_gradient
+    # new_m = m - LEARNING_RATE * m_gradient
+    # new_b = b - LEARNING_RATE * b_gradient
 
-    return np.array([new_m, new_b])
+    # return np.array([new_m, new_b])
+
+    return np.array([m_gradient, b_gradient])
+
+def hasConverged(old_w, w, EPSILON, num_iterations, max_iterations):
+    return (abs(w[0] - old_w[0]) < EPSILON and abs(w[1] - old_w[1])) or (num_iterations > max_iterations)
 
 # Initialize MPI
 comm = MPI.COMM_WORLD
@@ -107,7 +115,11 @@ q = np.array([0.0, 0.0])
 
 num_iterations = 0
 
-while num_iterations < 100000:
+
+converged = False
+while not converged:
+
+    old_w = w
     if rank == 0:
         print("\niteration {0}".format(num_iterations))
         print("current model: m: {1}, b: {2}".format(rank,w[0],w[1]))
@@ -117,9 +129,7 @@ while num_iterations < 100000:
     #     print("node {0} computing grad w...".format(rank))
     #     print("grad m at node {0} = {1}".format(rank,grad_w[0]))
     #     print("grad b at node {0} = {1}".format(rank,grad_w[1]))
-    m = w[0]
-    b = w[1]
-    q = step_gradient(m, b, training_data)
+    q = w - LEARNING_RATE * gradient(w, training_data)
 
     # send q to other nodes
     for u in range(0, size):
@@ -163,11 +173,9 @@ while num_iterations < 100000:
                 if rcvd_from_u:
                     q_u[u] = new_data
                     number_of_messages_received += 1
-                    if rank == 0:
-                        print("Node {1}'s q: {0}".format(new_data,u))
+                    
 
-    print("Node 0's q: {}".format(q))
-
+    
     w = np.array([0., 0.])
     for u in range(0, size):
         Puv = P[rank, u]
@@ -179,3 +187,5 @@ while num_iterations < 100000:
     # wait for all nodes to finish this iteration
     comm.Barrier()
     num_iterations += 1
+
+    converged = hasConverged(old_w, w, EPSILON, num_iterations, MAX_ITERATIONS)
