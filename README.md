@@ -1,3 +1,3 @@
 To run:
 
-mpirun -np 4 python testmpi.py
+mpirun -np 4 python3 sync_driver.py
