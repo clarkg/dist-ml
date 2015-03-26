@@ -16,7 +16,7 @@ EPSILON = 1E-7
 LEARNING_RATE = 1E-4
 MAX_ITERATIONS = 1E3
 
-DATA_LOCATION = "../line_data2.txt"
+DATA_LOCATION = "/home/ubuntu/dist-ml/line_data2.txt"
 
 # P is the consensus matrix
 P = np.array([[(1.0/3.0), (1.0/3.0), 0.0, (1.0/3.0)], [(1.0/3.0), (1.0/3.0),
