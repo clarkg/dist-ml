@@ -12,9 +12,9 @@ import matrix_util
 
 # Constants
 NUM_LINES_IN_FILE = 100
-EPSILON = 1E-7
+EPSILON = 1E-12
 LEARNING_RATE = 1E-4
-MAX_ITERATIONS = 1E3
+MAX_ITERATIONS = 1E4
 
 DATA_LOCATION = "../line_data2.txt"
 
@@ -29,27 +29,61 @@ P = np.array([[(1.0/3.0), (1.0/3.0), 0.0, (1.0/3.0)], [(1.0/3.0), (1.0/3.0),
 
 def gradient_descent_runner(training_data, w, LEARNING_RATE, num_iterations):
     for i in range(num_iterations):
-        m = w[0]
-        b = w[1]
-        w = step_gradient(m, b, training_data)
+        m = w[:-1]
+        b = w[-1]
+        w = step_gradient(w, training_data)
     return w
 
 def gradient(w, training_data):
-    m_gradient = 0.
+    """ w : vector of (d + 1) elements m::b
+
+        m : vector of d elements [m_1, m_2, ..., m_d]
+        b : scalar
+
+        so w has form [m_1, m_2, ..., m_d, b]
+
+        training_data : list of (d + 1)-sized vectors x::y
+                         where x is an d-dimensional vector
+                        and y is a scalar value
+        n : dimensions of vectors
+
+        output : w
+                where grad_m is a d-dimensional vector
+                and grad_b is a scalar"""
+    assert w.ndim == 1
+    
+    m_gradient = np.zeros(w.size - 1, dtype = np.float)
     b_gradient = 0.
-    N = float(len(training_data))
-    m = w[0]
-    b = w[1]
+    N = float(len(training_data)) # number of training data pairs
+    m = w[:-1]
+    b = w[-1] 
+    d =  m.size
 
-    for x, y in training_data:
-        # w[0] is m and w[1] is b
-        m_gradient += (-2/N) * x * (y - (m * x) - b)
-        b_gradient += (-2/N) * (y - (m * x) - b) 
+    for pair in training_data:
+        x = pair[:-1]
+        y = pair[-1]
 
-    return np.array([m_gradient, b_gradient])
+        common_loss_sum = (-2. / N) * (y - np.dot(m, x) - b)
+        b_gradient += common_loss_sum
+        for i in range(d):
+            m_gradient[i] +=  x[i] * common_loss_sum
+
+    return np.append(m_gradient, b_gradient)
+
+def computeError(old_w, w):
+    """ old_w : vector of d elements
+        w : vector of d elements
+
+        output : Error between old_w and w """
+    d = w.size
+
+    error = 0.
+    for i in range(d):
+        error += ((old_w[i] - w[i]) ** 2)
+    return error
 
 def hasConverged(old_w, w, EPSILON, num_iterations, max_iterations):
-    return (abs(w[0] - old_w[0]) < EPSILON and abs(w[1] - old_w[1])) or (num_iterations > max_iterations)
+    return computeError(old_w, w) < EPSILON or (num_iterations > max_iterations)
 
 def run():
     assert matrix_util.isSquare(P)
@@ -89,9 +123,6 @@ def run():
     while not converged:
 
         old_w = w
-        if rank == 0:
-            print("\niteration {0}".format(num_iterations))
-            print("current model: m: {1}, b: {2}".format(rank,w[0],w[1]))
 
         q = w - LEARNING_RATE * gradient(w, training_data)
 
@@ -128,14 +159,13 @@ def run():
             Puv = P[rank, u]
             w += q_u[u] * Puv
 
-        if rank == 0:
-            print("new model: {0}\n".format(w))
-
         # wait for all nodes to finish this iteration
         comm.Barrier()
         num_iterations += 1
 
         converged = hasConverged(old_w, w, EPSILON, num_iterations, MAX_ITERATIONS)
+
+    print("Final model: {0}\n".format(w))
 
 if __name__ == '__main__':
     run()

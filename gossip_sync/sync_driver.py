@@ -14,7 +14,7 @@ import matrix_util
 NUM_LINES_IN_FILE = 100
 EPSILON = 1E-7
 LEARNING_RATE = 1E-4
-MAX_ITERATIONS = 1E3
+MAX_ITERATIONS = 1E4
 
 DATA_LOCATION = "../line_data2.txt"
 
@@ -89,9 +89,6 @@ def run():
     while not converged:
 
         old_w = w
-        if rank == 0:
-            print("\niteration {0}".format(num_iterations))
-            print("current model: m: {1}, b: {2}".format(rank,w[0],w[1]))
 
         q = w - LEARNING_RATE * gradient(w, training_data)
 
@@ -128,14 +125,13 @@ def run():
             Puv = P[rank, u]
             w += q_u[u] * Puv
 
-        if rank == 0:
-            print("new model: {0}\n".format(w))
-
         # wait for all nodes to finish this iteration
         comm.Barrier()
         num_iterations += 1
 
         converged = hasConverged(old_w, w, EPSILON, num_iterations, MAX_ITERATIONS)
+
+    print("Final model: {0}\n".format(w))
 
 if __name__ == '__main__':
     run()
