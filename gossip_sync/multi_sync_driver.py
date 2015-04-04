@@ -15,7 +15,7 @@ EPSILON = 1E-12
 LEARNING_RATE = 1E-4
 MAX_ITERATIONS = 1E4
 
-DATA_LOCATION = "../line_data2.txt"
+DATA_LOCATION = "../multivariate_line_data_d2_n100.txt"
 
 # P is the consensus matrix
 P = np.array([[(1.0 / 3.0), (1.0 / 3.0), 0.0,
@@ -115,15 +115,14 @@ def run():
     training_data = []
     for line in data_file:
         if curr_line >= start_line and curr_line <= end_line:
-            x, y = [float(f) for f in line.split(" ")]
-            training_data.append(np.array([x, y]))
+            x1, x2, y = [float(f) for f in line.split(" ")]
+            training_data.append(np.array([x1, x2, y]))
         curr_line += 1
 
     # Init
-    w = np.array([0.0, 0.0])  # w will represent the current guess
-    q = np.array(
-        [0.0, 0.0]
-    )  # q will represent the piece that each node sends to its neighbors
+    w = np.zeros(3)  # w will represent the current guess
+    q = np.zeros(
+        3)  # q will represent the piece that each node sends to its neighbors
 
     num_iterations = 0
 
@@ -162,7 +161,7 @@ def run():
                         q_u[u] = new_data
                         number_of_messages_received += 1
 
-        w = np.array([0., 0.])  # zero out w
+        w = np.zeros(3)  # zero out w
         for u in range(0, size):
             Puv = P[rank, u]
             w += q_u[u] * Puv

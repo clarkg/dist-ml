@@ -53,8 +53,8 @@ def gradient(w, training_data):
 
 
 def hasConverged(old_w, w, EPSILON, num_iterations, max_iterations):
-    return (abs(w[0] - old_w[0]) < EPSILON and
-            abs(w[1] - old_w[1])) or (num_iterations > max_iterations)
+    return (abs(w[0] - old_w[0]) < EPSILON and abs(w[1] - old_w[1])
+           ) or (num_iterations > max_iterations)
 
 
 def run():
@@ -87,9 +87,8 @@ def run():
 
     # Init
     w = np.array([0.0, 0.0])  # w will represent the current guess
-    q = np.array(
-        [0.0, 0.0]
-    )  # q will represent the piece that each node sends to its neighbors
+    q = np.array([0.0, 0.0
+        ])  # q will represent the piece that each node sends to its neighbors
 
     num_iterations = 0
 
