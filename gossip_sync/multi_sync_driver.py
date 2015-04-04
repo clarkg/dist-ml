@@ -5,7 +5,9 @@
 #
 
 from mpi4py import MPI
+import getopt
 import numpy as np
+import sys
 
 import matrix_util
 
@@ -14,8 +16,9 @@ NUM_LINES_IN_FILE = 100
 EPSILON = 1E-12
 LEARNING_RATE = 1E-4
 MAX_ITERATIONS = 1E4
+DEFAULT_DIM = 2
 
-DATA_LOCATION = "../multivariate_line_data_d2_n100.txt"
+DEFAULT_DATA_LOCATION = "../multivariate_line_data_d2_n100.txt"
 
 def generate_consensus_matrix(A):
     """ 
@@ -137,20 +140,35 @@ def adjacency_matrix(size):
 
     if size == 8:
         return np.array([
-            [0,1,1,1,1,1,1,1],
-            [1,0,1,1,1,1,1,1],
-            [1,1,0,1,1,1,1,1],
-            [1,1,1,0,1,1,1,1],
-            [1,1,1,1,0,1,1,1],
-            [1,1,1,1,1,0,1,1],
-            [1,1,1,1,1,1,0,1],
-            [1,1,1,1,1,1,1,0]
+            [0,1,0,0,0,0,0,1],
+            [1,0,1,0,0,0,0,0],
+            [0,1,0,1,0,0,0,0],
+            [0,0,1,0,1,0,0,0],
+            [0,0,0,1,0,1,0,0],
+            [0,0,0,0,1,0,1,0],
+            [0,0,0,0,0,1,0,1],
+            [1,0,0,0,0,0,1,0]
             ])
 
 
-def run():
-    assert matrix_util.isSquare(P)
-    assert matrix_util.isColumnStochastic(P)
+def run(argv):
+    dim = DEFAULT_DIM
+    data_location = DEFAULT_DATA_LOCATION
+
+    try:
+        opts, args = getopt.getopt(argv,"hi:d:",["ifile=", "dimensionality="])
+    except getopt.GetoptError:
+        print('mpirun <MPI OPTIONS> python3 multi_sync_driver.py -i <inputDataFile> -d <dimensionality>')
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print('mpirun <MPI OPTIONS> python3 multi_sync_driver.py -i <inputDataFile> -d <dimensionality>')
+            sys.exit()
+        elif opt in ("-i", "--ifile"):
+            data_location = arg
+        elif opt in ("-d", "--dimensionality"):
+            dim = float(arg)
+
 
     # Initialize MPI
     comm = MPI.COMM_WORLD
@@ -160,6 +178,8 @@ def run():
     A = adjacency_matrix(size)
 
     P = generate_consensus_matrix(A)
+    assert matrix_util.isSquare(P)
+    assert matrix_util.isColumnStochastic(P)
 
     # Make sure P has the correct dimensions given number of processes
     assert P.shape[0] == size
@@ -170,18 +190,21 @@ def run():
     end_line = (rank + 1) * lines_per_task - 1
 
     curr_line = 0
-    data_file = open(DATA_LOCATION, "r")
+    data_file = open(data_location, "r")
     training_data = []
     for line in data_file:
         if curr_line >= start_line and curr_line <= end_line:
-            x1, x2, y = [float(f) for f in line.split(" ")]
-            training_data.append(np.array([x1, x2, y]))
+            new_datum = np.array([float(f) for f in line.split(" ")])
+
+            if new_datum.size != dim + 1:
+                raise ValueError("Dimensionality {0} does not match input file {1} which instead matches dimensionality {2}.".format(dim, data_location, new_datum.size))
+            training_data.append(new_datum)
         curr_line += 1
 
     # Init
-    w = np.zeros(3)  # w will represent the current guess
+    w = np.zeros(dim + 1, dtype=np.float)  # w will represent the current guess
     q = np.zeros(
-        3)  # q will represent the piece that each node sends to its neighbors
+        dim + 1, dtype=np.float)  # q will represent the piece that each node sends to its neighbors
 
     num_iterations = 0
 
@@ -220,7 +243,7 @@ def run():
                         q_u[u] = new_data
                         number_of_messages_received += 1
 
-        w = np.zeros(3)  # zero out w
+        w = np.zeros(dim + 1)  # zero out w
         for u in range(0, size):
             Puv = P[rank, u]
             w += q_u[u] * Puv
@@ -236,4 +259,4 @@ def run():
 
 
 if __name__ == '__main__':
-    run()
+    run(sys.argv[1:])
