@@ -7,13 +7,12 @@ m = 10 * randn([1 d]);
 b = randn([1 1]);
 
 % create N lines of training data
-N = 100000000;
-N = 10;
+N = 1000000;
 X = 10*randn([N d]);
 Y = zeros([N 1]);
 
 for i = 1:N
-    Y(i,:) = m*X(i,:)';
+    Y(i,:) = m*X(i,:)' + b;
 end
 
 % horizontally concatenate X and Y
