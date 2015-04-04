@@ -2,14 +2,14 @@
 % multivariate linear regression test
 
 % d-dimensional m vector
-d = 20;
+d = 10;
 m = 10 * randn([1 d]);
 b = randn([1 1]);
 
 % create N lines of training data
 N = 100000000;
 N = 10;
-X = 10*randn([N d]);
+X = 10*randn([d N]);
 Y = zeros([N 1]);
 
 for i = 1:N
