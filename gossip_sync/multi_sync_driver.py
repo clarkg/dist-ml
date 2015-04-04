@@ -17,17 +17,46 @@ MAX_ITERATIONS = 1E4
 
 DATA_LOCATION = "../multivariate_line_data_d2_n100.txt"
 
-# P is the consensus matrix
-P = np.array([[(1.0 / 3.0), (1.0 / 3.0), 0.0,
-               (1.0 / 3.0)], [(1.0 / 3.0), (1.0 / 3.0), (1.0 / 3.0), 0.0],
-              [0.0, (1.0 / 3.0), (1.0 / 3.0),
-               (1.0 / 3.0)], [(1.0 / 3.0), 0.0, (1.0 / 3.0), (1.0 / 3.0)]])
+def generate_consensus_matrix(A):
+    """ 
+    Given an adjacency matrix A,
+    return a doubly stochastic consensus matrix P
+    computed using the Metropolis-Hastings algorithm
 
-# 1/3 1/3 0 1/3
-# 1/3 1/3 1/3 0
-# 0 1/3 1/3 1/3
-# 1/3 0 1/3 1/3
+    A : square adjacency matrix
 
+    output : consensus matrix of same size as A
+
+    """
+
+    size_A = A.shape[0]
+
+    # size "size_A" identity matrix
+    I = np.eye(size_A, dtype=np.float)
+    A = A + I
+
+    # iterate through vertices
+    # and get their degree
+    dv = np.zeros(size_A, dtype=np.float)
+    for v in range(0,size_A):
+        for i in range(0,size_A):
+            dv[v] += A[v][i]
+
+    # calculate non diagonal Pij
+    P = np.zeros([size_A, size_A])
+    for i in range(0,size_A):
+        for j in range(0,size_A):
+            if i != j and A[i][j] != 0:
+                P[i][j] = 1/max(dv[i],dv[j])
+
+    # calculate Pii
+    for i in range(0,size_A):
+        sum_Pij = 0
+        for j in range(0,size_A):           
+            sum_Pij += P[i][j]
+        P[i][i] = 1 - sum_Pij
+
+    return P
 
 def gradient_descent_runner(training_data, w, LEARNING_RATE, num_iterations):
     for i in range(num_iterations):
@@ -90,6 +119,34 @@ def computeError(old_w, w):
 def hasConverged(old_w, w, EPSILON, num_iterations, max_iterations):
     return computeError(old_w, w) < EPSILON or (num_iterations > max_iterations)
 
+def adjacency_matrix(size):
+    if size == 1:
+        return np.array([[1]])
+    if size == 2:
+        return np.array([
+            [0, 1],
+            [1, 0]
+            ])
+    if size == 4:
+        return np.array([
+          [0,1,0,1],
+          [1,0,1,0],
+          [0,1,0,1],
+          [1,0,1,0]
+          ]) 
+
+    if size == 8:
+        return np.array([
+            [0,1,1,1,1,1,1,1],
+            [1,0,1,1,1,1,1,1],
+            [1,1,0,1,1,1,1,1],
+            [1,1,1,0,1,1,1,1],
+            [1,1,1,1,0,1,1,1],
+            [1,1,1,1,1,0,1,1],
+            [1,1,1,1,1,1,0,1],
+            [1,1,1,1,1,1,1,0]
+            ])
+
 
 def run():
     assert matrix_util.isSquare(P)
@@ -100,7 +157,9 @@ def run():
     rank = comm.Get_rank()
     size = comm.Get_size()
 
-    print(P.size)
+    A = adjacency_matrix(size)
+
+    P = generate_consensus_matrix(A)
 
     # Make sure P has the correct dimensions given number of processes
     assert P.shape[0] == size
