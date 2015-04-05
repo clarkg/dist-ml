@@ -102,10 +102,8 @@ def computeError(old_w, w):
         error += ((old_w[i] - w[i]) ** 2)
     return error
 
-
 def hasConverged(old_w, w, epsilon, num_iter, max_iter):
     return computeError(old_w, w) < epsilon or (num_iter > max_iter)
-
 
 def getConstants(argv):
     dim = DEF_DIM
