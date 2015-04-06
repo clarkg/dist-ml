@@ -84,7 +84,7 @@ def partitionData(data_loc, num_lines, num_processes, dim, rank):
             if new_datum.size != dim + 1:
                 raise ValueError(
                     "Dimensionality {0} does not match input file {1} which instead matches dimensionality {2}.".format(
-                        dim, data_location, new_datum.size - 1))
+                        dim, data_loc, new_datum.size - 1))
             training_data.append(new_datum)
         curr_line += 1
     return training_data
@@ -179,9 +179,8 @@ def run(argv):
     converged = False
     old_w = w
     while not converged:
-
         old_w = w
-
+        print(num_iterations)
         q = w - learn_rate * gradient(w, training_data)
 
         # send q to other nodes
