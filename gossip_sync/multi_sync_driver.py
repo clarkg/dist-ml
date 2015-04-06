@@ -180,7 +180,6 @@ def run(argv):
     old_w = w
     while not converged:
         old_w = w
-        print(num_iterations)
         q = w - learn_rate * gradient(w, training_data)
 
         # send q to other nodes
