@@ -144,7 +144,7 @@ def getConstants(argv):
         elif opt in ("-r", "--learn_rate"):
             learn_rate = float(arg)
             assert learning_rate > 0.
-        elif opt in ("-u", "--usr_def_topology")
+        elif opt in ("-u", "--usr_def_topology"):
             topology = DEF_TOPOLOGY
 
     return (dim, epsilon, data_loc, num_lines, max_iter, learn_rate, topology)
@@ -187,7 +187,8 @@ def run(argv):
     converged = False
     old_w = w
     while not converged:
-        print(num_iterations)
+        if rank == 0:
+            print(num_iterations)
         old_w = w
         q = w - learn_rate * gradient(w, training_data)
         # send q to other nodes
@@ -203,7 +204,13 @@ def run(argv):
         number_of_messages_received = 0
         # without this barrier, only 0 gets sent...
         comm.Barrier()
-        while number_of_messages_received != (size - 1):
+        
+        if size > 2:
+            number_of_messages_expected = 2
+        else:
+            number_of_messages_expected = 1
+        
+        while number_of_messages_received != number_of_messages_expected:
             # pop from the message queue
             for u in range(0, size):
                 new_data = np.empty(q.size, dtype=np.float64)
@@ -227,6 +234,7 @@ def run(argv):
         #converged = hasConverged(old_w, w, epsilon, num_iterations, max_iter)	
 
         # wait for all nodes to finish this iteration
+
         comm.Barrier()
     if rank == 0:
         print("Final model: {0}".format(w))
