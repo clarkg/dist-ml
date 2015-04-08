@@ -217,7 +217,7 @@ def run(argv):
 
         # send q to other nodes
         for u in range(0, size):
-            if rank != u:
+            if rank != u and P[rank, u] != 0:
                 comm.Isend([q, MPI.FLOAT], u, tag=num_iterations)
 
         # collect q from other nodes
@@ -234,7 +234,7 @@ def run(argv):
             # pop from the message queue
             for u in range(0, size):
                 new_data = np.empty(q.size, dtype=np.float64)
-                if rank != u:
+                if rank != u and P[rank, u] != 0:
                     rcvd_from_u = comm.Irecv([new_data, MPI.FLOAT],
                                              source=u,
                                              tag=num_iterations)
@@ -245,8 +245,9 @@ def run(argv):
 
         w = np.zeros(dim + 1)  # zero out w
         for u in range(0, size):
-            Puv = P[rank, u]
-            w += q_u[u] * Puv
+            if P[rank, u] != 0:
+                Puv = P[rank, u]
+                w += q_u[u] * Puv
 
         # wait for all nodes to finish this iteration
         comm.Barrier()
