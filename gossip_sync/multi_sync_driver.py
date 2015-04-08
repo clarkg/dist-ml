@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 #
-# Driver program for asynchronous gossip DO for ML.
+# Driver program for synchronous gossip DO for ML.
 #
 
 from mpi4py import MPI
