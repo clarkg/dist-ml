@@ -19,6 +19,8 @@ DEF_LEARN_RATE = 1E-4
 DEF_MAX_ITER = 1E4
 DEF_DIM = 2
 DEF_DATA_LOC = "../test_data/multivariate_line_data_d2_n100.txt"
+DEF_RING = 0
+DEF_TOPOLOGY = 1
 
 HELP_MESSAGE = "mpirun [<MPI OPTIONS>] <python3 | python> multi_sync_driver.py  [-i <inputDataFile>] [-d <dimensionality>] [-n <num_iterations>] [-e <epsilon>] [-r <learning_rate>] [-l <num_lines_in_file>]"
 
@@ -112,6 +114,7 @@ def getConstants(argv):
     num_lines = DEF_NUM_LINES
     max_iter = DEF_MAX_ITER
     learn_rate = DEF_LEARN_RATE
+    topology = DEF_RING
 
     try:
         opts, args = getopt.getopt(argv, "hd:e:i:l:n:r",
@@ -142,7 +145,10 @@ def getConstants(argv):
         elif opt in ("-r", "--learn_rate"):
             learn_rate = float(arg)
             assert learning_rate > 0.
-    return (dim, epsilon, data_loc, num_lines, max_iter, learn_rate)
+        elif opt in ("-u", "--usr_def_topology")
+            topology = DEF_TOPOLOGY
+
+    return (dim, epsilon, data_loc, num_lines, max_iter, learn_rate, topology)
 
 
 def initMPI():
@@ -152,11 +158,14 @@ def initMPI():
 
 def run(argv):
     (dim, epsilon, data_loc, num_lines, max_iter,
-     learn_rate) = getConstants(argv)
+     learn_rate, topology) = getConstants(argv)
 
     (comm, rank, size) = initMPI()
+    if topology == DEF_TOPOLOGY:
+         A = consensus.usr_def_adjacency_matrix()
+    else:
+         A = consensus.adjacency_matrix(size)
 
-    A = consensus.adjacency_matrix(size)
     P = consensus.generate_consensus_matrix(A)
     assert matrix_util.isSquare(P)
     assert matrix_util.isColumnStochastic(P)
