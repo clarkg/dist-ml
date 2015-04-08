@@ -7,18 +7,19 @@
 from mpi4py import MPI
 import getopt
 import numpy as np
+import time
 import sys
 
 import consensus_matrix as consensus
 import matrix_util
 
 # Constants
-DEF_NUM_LINES = int(1E2)
+DEF_NUM_LINES = int(1E5)
 DEF_EPSILON = 1E-12
 DEF_LEARN_RATE = 1E-4
 DEF_MAX_ITER = 1E4
-DEF_DIM = 2
-DEF_DATA_LOC = "../test_data/multivariate_line_data_d2_n100.txt"
+DEF_DIM = 10
+DEF_DATA_LOC = "../test_data/multivariate_line_data_d10_n100000.txt"
 
 HELP_MESSAGE = "mpirun [<MPI OPTIONS>] <python3 | python> multi_sync_driver.py  [-i <inputDataFile>] [-d <dimensionality>] [-n <num_iterations>] [-e <epsilon>] [-r <learning_rate>] [-l <num_lines_in_file>]"
 
@@ -46,7 +47,6 @@ def gradient(w, training_data):
     m = w[:-1]
     b = w[-1]
     d = m.size
-
     for pair in training_data:
         x = pair[:-1]
         y = pair[-1]
@@ -55,7 +55,6 @@ def gradient(w, training_data):
         b_gradient += common_loss_sum
         for i in range(d):
             m_gradient[i] += x[i] * common_loss_sum
-
     return np.append(m_gradient, b_gradient)
 
 
@@ -179,24 +178,22 @@ def run(argv):
     converged = False
     old_w = w
     while not converged:
+        print(num_iterations)
         old_w = w
         q = w - learn_rate * gradient(w, training_data)
-
         # send q to other nodes
         for u in range(0, size):
             if rank != u:
                 comm.Isend([q, MPI.FLOAT], u, tag=num_iterations)
-
+        
         # collect q from other nodes
         q_u = [np.empty(q.size, dtype=np.float64) for i in range(0, size)]
         q_u[rank] = q
 
         status = MPI.Status()
         number_of_messages_received = 0
-
         # without this barrier, only 0 gets sent...
         comm.Barrier()
-
         while number_of_messages_received != (size - 1):
             # pop from the message queue
             for u in range(0, size):
@@ -209,18 +206,18 @@ def run(argv):
                     if rcvd_from_u:
                         q_u[u] = new_data
                         number_of_messages_received += 1
-
         w = np.zeros(dim + 1)  # zero out w
         for u in range(0, size):
             Puv = P[rank, u]
             w += q_u[u] * Puv
 
-        # wait for all nodes to finish this iteration
-        comm.Barrier()
         num_iterations += 1
 
-        converged = hasConverged(old_w, w, epsilon, num_iterations, max_iter)
+        converged = num_iterations > max_iter
+        #converged = hasConverged(old_w, w, epsilon, num_iterations, max_iter)	
 
+        # wait for all nodes to finish this iteration
+        comm.Barrier()
     if rank == 0:
         print("Final model: {0}".format(w))
         print("Error : {0}".format(computeError(old_w, w)))
