@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 #
-# Driver program for asynchronous gossip DO for ML.
+# Driver program for synchronous gossip DO for ML.
 #
 
 from mpi4py import MPI
@@ -9,65 +9,18 @@ import getopt
 import numpy as np
 import sys
 
+import consensus_matrix as consensus
 import matrix_util
 
 # Constants
-NUM_LINES_IN_FILE = 100
-EPSILON = 1E-12
-LEARNING_RATE = 1E-4
-MAX_ITERATIONS = 1E4
-DEFAULT_DIM = 2
+DEF_NUM_LINES = int(1E2)
+DEF_EPSILON = 1E-12
+DEF_LEARN_RATE = 1E-4
+DEF_MAX_ITER = 1E4
+DEF_DIM = 2
+DEF_DATA_LOC = "../test_data/multivariate_line_data_d2_n100.txt"
 
-DEFAULT_DATA_LOCATION = "../multivariate_line_data_d2_n100.txt"
-
-def generate_consensus_matrix(A):
-    """ 
-    Given an adjacency matrix A,
-    return a doubly stochastic consensus matrix P
-    computed using the Metropolis-Hastings algorithm
-
-    A : square adjacency matrix
-
-    output : consensus matrix of same size as A
-
-    """
-
-    size_A = A.shape[0]
-
-    # size "size_A" identity matrix
-    I = np.eye(size_A, dtype=np.float)
-    A = A + I
-
-    # iterate through vertices
-    # and get their degree
-    dv = np.zeros(size_A, dtype=np.float)
-    for v in range(0,size_A):
-        for i in range(0,size_A):
-            dv[v] += A[v][i]
-
-    # calculate non diagonal Pij
-    P = np.zeros([size_A, size_A])
-    for i in range(0,size_A):
-        for j in range(0,size_A):
-            if i != j and A[i][j] != 0:
-                P[i][j] = 1/max(dv[i],dv[j])
-
-    # calculate Pii
-    for i in range(0,size_A):
-        sum_Pij = 0
-        for j in range(0,size_A):           
-            sum_Pij += P[i][j]
-        P[i][i] = 1 - sum_Pij
-
-    return P
-
-def gradient_descent_runner(training_data, w, LEARNING_RATE, num_iterations):
-    for i in range(num_iterations):
-        m = w[:-1]
-        b = w[-1]
-        w = step_gradient(w, training_data)
-    return w
-
+HELP_MESSAGE = "mpirun [<MPI OPTIONS>] <python3 | python> multi_sync_driver.py  [-i <inputDataFile>] [-d <dimensionality>] [-n <num_iterations>] [-e <epsilon>] [-r <learning_rate>] [-l <num_lines_in_file>]"
 
 def gradient(w, training_data):
     """ w : vector of (d + 1) elements m::b
@@ -106,6 +59,37 @@ def gradient(w, training_data):
     return np.append(m_gradient, b_gradient)
 
 
+def partitionData(data_loc, num_lines, num_processes, dim, rank):
+    """ data_loc : Path to input data file
+        num_lines : Number of lines in file
+        num_processes : Number of processes amongst which to partition data
+        dim : Dimensionality 
+
+        output : training_data
+                which is a list of numpy arrays where
+                the last element is a scalar output y and the 
+                first element is a vector input [x_0, x_1, ..., x_(dim - 1)]"""
+    # Partition data
+    lines_per_task = num_lines / num_processes
+    start_line = rank * lines_per_task
+    end_line = (rank + 1) * lines_per_task - 1
+
+    curr_line = 0
+    data_file = open(data_loc, "r")
+    training_data = []
+    for line in data_file:
+        if curr_line >= start_line and curr_line <= end_line:
+            new_datum = np.array([float(f) for f in line.split(" ")])
+
+            if new_datum.size != dim + 1:
+                raise ValueError(
+                    "Dimensionality {0} does not match input file {1} which instead matches dimensionality {2}.".format(
+                        dim, data_loc, new_datum.size - 1))
+            training_data.append(new_datum)
+        curr_line += 1
+    return training_data
+
+
 def computeError(old_w, w):
     """ old_w : vector of d elements
         w : vector of d elements
@@ -118,66 +102,62 @@ def computeError(old_w, w):
         error += ((old_w[i] - w[i]) ** 2)
     return error
 
+def hasConverged(old_w, w, epsilon, num_iter, max_iter):
+    return computeError(old_w, w) < epsilon or (num_iter > max_iter)
 
-def hasConverged(old_w, w, EPSILON, num_iterations, max_iterations):
-    return computeError(old_w, w) < EPSILON or (num_iterations > max_iterations)
+def getConstants(argv):
+    dim = DEF_DIM
+    epsilon = DEF_EPSILON
+    data_loc = DEF_DATA_LOC
+    num_lines = DEF_NUM_LINES
+    max_iter = DEF_MAX_ITER
+    learn_rate = DEF_LEARN_RATE
 
-def adjacency_matrix(size):
-    if size == 1:
-        return np.array([[1]])
-    if size == 2:
-        return np.array([
-            [0, 1],
-            [1, 0]
-            ])
-    if size == 4:
-        return np.array([
-          [0,1,0,1],
-          [1,0,1,0],
-          [0,1,0,1],
-          [1,0,1,0]
-          ]) 
+    try:
+        opts, args = getopt.getopt(argv, "hd:e:i:l:n:r",
+                                   ["help", "dim=", "epsilon=", "input_file=",
+                                    "num_lines=", "num_iterations=",
+                                    "learn_rate="])
+    except getopt.GetoptError:
+        print(HELP_MESSAGE)
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt in ("-h", "help"):
+            print(HELP_MESSAGE)
+            sys.exit()
+        elif opt in ("-d", "dim"):
+            dim = int(arg)
+            assert dim > 0
+        elif opt in ("-e", "epsilon"):
+            epsilon = float(arg)
+            assert epsilon > 0.
+        elif opt in ("-i", "--input_file"):
+            data_loc = arg
+        elif opt in ("-l", "--num_lines"):
+            num_lines = int(arg)
+            assert num_lines > 0
+        elif opt in ("-n", "--num_iterations"):
+            max_iter = int(arg)
+            assert num_iterations > 0
+        elif opt in ("-r", "--learn_rate"):
+            learn_rate = float(arg)
+            assert learning_rate > 0.
+    return (dim, epsilon, data_loc, num_lines, max_iter, learn_rate)
 
-    if size == 8:
-        return np.array([
-            [0,1,0,0,0,0,0,1],
-            [1,0,1,0,0,0,0,0],
-            [0,1,0,1,0,0,0,0],
-            [0,0,1,0,1,0,0,0],
-            [0,0,0,1,0,1,0,0],
-            [0,0,0,0,1,0,1,0],
-            [0,0,0,0,0,1,0,1],
-            [1,0,0,0,0,0,1,0]
-            ])
+
+def initMPI():
+    comm = MPI.COMM_WORLD
+    return (MPI.COMM_WORLD, comm.Get_rank(), comm.Get_size())
 
 
 def run(argv):
-    dim = DEFAULT_DIM
-    data_location = DEFAULT_DATA_LOCATION
+    (dim, epsilon, data_loc, num_lines, max_iter,
+     learn_rate) = getConstants(argv)
 
-    try:
-        opts, args = getopt.getopt(argv,"hi:d:",["ifile=", "dimensionality="])
-    except getopt.GetoptError:
-        print('mpirun <MPI OPTIONS> python3 multi_sync_driver.py -i <inputDataFile> -d <dimensionality>')
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-h':
-            print('mpirun <MPI OPTIONS> python3 multi_sync_driver.py -i <inputDataFile> -d <dimensionality>')
-            sys.exit()
-        elif opt in ("-i", "--ifile"):
-            data_location = arg
-        elif opt in ("-d", "--dimensionality"):
-            dim = float(arg)
+    (comm, rank, size) = initMPI()
 
-
-    # Initialize MPI
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
-
-    A = adjacency_matrix(size)
-
-    P = generate_consensus_matrix(A)
+    A = consensus.adjacency_matrix(size)
+    P = consensus.generate_consensus_matrix(A)
     assert matrix_util.isSquare(P)
     assert matrix_util.isColumnStochastic(P)
 
@@ -185,35 +165,22 @@ def run(argv):
     assert P.shape[0] == size
 
     # Partition data
-    lines_per_task = NUM_LINES_IN_FILE / size
-    start_line = rank * lines_per_task
-    end_line = (rank + 1) * lines_per_task - 1
-
-    curr_line = 0
-    data_file = open(data_location, "r")
-    training_data = []
-    for line in data_file:
-        if curr_line >= start_line and curr_line <= end_line:
-            new_datum = np.array([float(f) for f in line.split(" ")])
-
-            if new_datum.size != dim + 1:
-                raise ValueError("Dimensionality {0} does not match input file {1} which instead matches dimensionality {2}.".format(dim, data_location, new_datum.size))
-            training_data.append(new_datum)
-        curr_line += 1
+    training_data = partitionData(data_loc, num_lines, size, dim, rank)
 
     # Init
     w = np.zeros(dim + 1, dtype=np.float)  # w will represent the current guess
     q = np.zeros(
-        dim + 1, dtype=np.float)  # q will represent the piece that each node sends to its neighbors
+        dim + 1,
+        dtype=np.float
+    )  # q will represent the piece that each node sends to its neighbors
 
     num_iterations = 0
 
     converged = False
+    old_w = w
     while not converged:
-
         old_w = w
-
-        q = w - LEARNING_RATE * gradient(w, training_data)
+        q = w - learn_rate * gradient(w, training_data)
 
         # send q to other nodes
         for u in range(0, size):
@@ -253,10 +220,12 @@ def run(argv):
         comm.Barrier()
         num_iterations += 1
 
-        converged = hasConverged(old_w, w, EPSILON, num_iterations,
-                                 MAX_ITERATIONS)
+        converged = hasConverged(old_w, w, epsilon, num_iterations, max_iter)
 
-    print("Final model: {0}\n".format(w))
+    if rank == 0:
+        print("Final model: {0}".format(w))
+        print("Error : {0}".format(computeError(old_w, w)))
+        print("Number of iterations : {0}\n".format(num_iterations - 1))
 
 
 if __name__ == '__main__':
