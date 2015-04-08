@@ -41,6 +41,9 @@ def generate_consensus_matrix(A):
 
     return P
 
+def usr_def_adjacency_matrix():
+    # Paste your adjacency matrix here!
+    return None
 
 def adjacency_matrix(size):
     if size == 1:

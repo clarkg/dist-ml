@@ -23,7 +23,7 @@ DEF_TOPOLOGY = 1
 DEF_DIM = 10
 DEF_DATA_LOC = "../test_data/multivariate_line_data_d10_n100000.txt"
 
-HELP_MESSAGE = "mpirun [<MPI OPTIONS>] <python3 | python> multi_sync_driver.py  [-i <inputDataFile>] [-d <dimensionality>] [-n <num_iterations>] [-e <epsilon>] [-r <learning_rate>] [-l <num_lines_in_file>]"
+HELP_MESSAGE = "mpirun [<MPI OPTIONS>] <python3 | python> multi_sync_driver.py  [-i <inputDataFile>] [-d <dimensionality>] [-n <num_iterations>] [-e <epsilon>] [-r <learning_rate>] [-l <num_lines_in_file>] [-t]"
 
 def gradient(w, training_data):
     """ w : vector of (d + 1) elements m::b
@@ -116,10 +116,10 @@ def getConstants(argv):
     topology = DEF_RING
 
     try:
-        opts, args = getopt.getopt(argv, "hd:e:i:l:n:r",
+        opts, args = getopt.getopt(argv, "hd:e:i:l:n:r:t",
                                    ["help", "dim=", "epsilon=", "input_file=",
                                     "num_lines=", "num_iterations=",
-                                    "learn_rate="])
+                                    "learn_rate=", "topology="])
     except getopt.GetoptError:
         print(HELP_MESSAGE)
         sys.exit(2)
@@ -144,7 +144,7 @@ def getConstants(argv):
         elif opt in ("-r", "--learn_rate"):
             learn_rate = float(arg)
             assert learning_rate > 0.
-        elif opt in ("-u", "--usr_def_topology"):
+        elif opt in ("-t", "--usr_def_topology"):
             topology = DEF_TOPOLOGY
 
     return (dim, epsilon, data_loc, num_lines, max_iter, learn_rate, topology)
