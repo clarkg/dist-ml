@@ -194,6 +194,8 @@ def run(argv):
         # send q to other nodes
         for u in range(0, size):
             if rank != u and P[rank, u] != 0:
+                Puv = P[rank, u]
+                q = q * Puv
                 comm.Isend([q, MPI.FLOAT], u, tag=num_iterations)
         
         # collect q from other nodes
@@ -225,8 +227,7 @@ def run(argv):
         w = np.zeros(dim + 1)  # zero out w
         for u in range(0, size):
             if P[rank, u] != 0:
-                Puv = P[rank, u]
-                w += q_u[u] * Puv
+                w += q_u[u]
 
         num_iterations += 1
 
