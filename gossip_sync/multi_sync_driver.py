@@ -154,6 +154,13 @@ def initMPI():
     comm = MPI.COMM_WORLD
     return (MPI.COMM_WORLD, comm.Get_rank(), comm.Get_size())
 
+def num_msgs_expected(A,rank):
+    num = 0
+    for i in range(0,A.shape[0]):
+        if A[rank][i] == 1:
+            num += 1
+    return num
+
 
 def run(argv):
     (dim, epsilon, data_loc, num_lines, max_iter,
@@ -186,32 +193,30 @@ def run(argv):
 
     converged = False
     old_w = w
+    number_of_messages_expected = num_msgs_expected(A,rank)
+    # number_of_messages_expected = 2
+
     while not converged:
         if rank == 0:
             print(num_iterations)
+        
+        w = w - learn_rate * gradient(w, training_data)
         old_w = w
-        q = w - learn_rate * gradient(w, training_data)
         # send q to other nodes
         for u in range(0, size):
             if rank != u and P[rank, u] != 0:
                 Puv = P[rank, u]
-                q = q * Puv
+                q = w * Puv
                 comm.Isend([q, MPI.FLOAT], u, tag=num_iterations)
         
         # collect q from other nodes
         q_u = [np.empty(q.size, dtype=np.float64) for i in range(0, size)]
         q_u[rank] = q
 
-        status = MPI.Status()
         number_of_messages_received = 0
         # without this barrier, only 0 gets sent...
         comm.Barrier()
-        
-        if size > 2:
-            number_of_messages_expected = 2
-        else:
-            number_of_messages_expected = 1
-        
+
         while number_of_messages_received != number_of_messages_expected:
             # pop from the message queue
             for u in range(0, size):
@@ -224,6 +229,7 @@ def run(argv):
                     if rcvd_from_u:
                         q_u[u] = new_data
                         number_of_messages_received += 1
+
         w = np.zeros(dim + 1)  # zero out w
         for u in range(0, size):
             if P[rank, u] != 0:
@@ -232,7 +238,7 @@ def run(argv):
         num_iterations += 1
 
         converged = num_iterations > max_iter
-        #converged = hasConverged(old_w, w, epsilon, num_iterations, max_iter)	
+        # converged = hasConverged(old_w, w, epsilon, num_iterations, max_iter)	
 
         # wait for all nodes to finish this iteration
 
